@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Productivity - Rohan</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #faf9f5;
+      --card: #ffffff;
+      --text: #141413;
+      --muted: #8c8c8a;
+      --accent: #D97757;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e5e4df;
+    }
+    h1 { font-size: 2rem; margin-bottom: 10px; }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 10px 20px;
+      border: 1px solid #e5e4df;
+      background: var(--card);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    button:hover { background: #f5f4ef; }
+    button.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .section { display: none; }
+    .section.active { display: block; }
+    .task-section {
+      margin-bottom: 30px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+      letter-spacing: 0.05em;
+    }
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .task-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--card);
+      border: 1px solid #eeeee9;
+      border-radius: 10px;
+      align-items: flex-start;
+    }
+    .task-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      margin-top: 2px;
+      cursor: pointer;
+    }
+    .task-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .task-title {
+      font-size: 15px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .task-item input[type="checkbox"]:checked ~ .task-content .task-title {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+    .task-note {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .add-task {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 12px;
+      background: #f5f4ef;
+      border-radius: 8px;
+    }
+    .add-task input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #e5e4df;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .add-task button {
+      padding: 8px 16px;
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .add-task button:hover { opacity: 0.9; }
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    .memory-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 16px;
+    }
+    .memory-card {
+      padding: 16px;
+      background: var(--card);
+      border: 1px solid #eeeee9;
+      border-radius: 10px;
+    }
+    .memory-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .memory-card p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    .actions button {
+      font-size: 12px;
+      padding: 6px 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Productivity</h1>
+    <p style="color: var(--muted); font-size: 14px;">rohan.s.sahota@gmail.com</p>
+  </header>
+
+  <div class="tabs">
+    <button class="active" onclick="switchTab('tasks')">Tasks</button>
+    <button onclick="switchTab('memory')">Memory</button>
+  </div>
+
+  <!-- TASKS TAB -->
+  <div id="tasks" class="section active">
+    <div class="task-section">
+      <div class="section-title">School</div>
+      <div class="task-list" id="school-tasks"></div>
+      <div class="add-task">
+        <input type="text" placeholder="Add school task..." id="school-input">
+        <button onclick="addTask('school')">Add</button>
+      </div>
+    </div>
+
+    <div class="task-section">
+      <div class="section-title">Work</div>
+      <div class="task-list" id="work-tasks"></div>
+      <div class="add-task">
+        <input type="text" placeholder="Add work task..." id="work-input">
+        <button onclick="addTask('work')">Add</button>
+      </div>
+    </div>
+
+    <div class="task-section">
+      <div class="section-title">Personal</div>
+      <div class="task-list" id="personal-tasks"></div>
+      <div class="add-task">
+        <input type="text" placeholder="Add personal task..." id="personal-input">
+        <button onclick="addTask('personal')">Add</button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button onclick="exportTasks()">Export Tasks</button>
+      <button onclick="clearCompleted()">Clear Done</button>
+    </div>
+  </div>
+
+  <!-- MEMORY TAB -->
+  <div id="memory" class="section">
+    <h2 style="margin-bottom: 16px;">People</h2>
+    <div class="memory-grid" id="people-grid"></div>
+
+    <h2 style="margin: 30px 0 16px;">Projects</h2>
+    <div class="memory-grid" id="projects-grid"></div>
+
+    <h2 style="margin: 30px 0 16px;">Terms</h2>
+    <div class="memory-grid" id="terms-grid"></div>
+
+    <div class="actions" style="margin-top: 30px;">
+      <button onclick="addMemory('person')">+ Add Person</button>
+      <button onclick="addMemory('project')">+ Add Project</button>
+      <button onclick="addMemory('term')">+ Add Term</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'productivity-data';
+
+    const defaultData = {
+      tasks: {
+        school: [
+          { id: 1, title: 'CSC384 A1', note: 'due June 15 11pm', done: false }
+        ],
+        work: [
+          { id: 2, title: 'Ship remaining android boxes', note: '', done: false },
+          { id: 3, title: 'Pay Aryan', note: '', done: false },
+          { id: 4, title: 'Breaking Cable payments', note: '', done: false }
+        ],
+        personal: [
+          { id: 5, title: 'Return Rogers modem', note: '', done: false }
+        ]
+      },
+      memory: {
+        people: [
+          { name: 'Aryan', role: 'Work contact' }
+        ],
+        projects: [
+          { name: 'Breaking Cable', desc: 'Work project' }
+        ],
+        terms: [
+          { term: 'CSC384', meaning: 'Course code' }
+        ]
+      }
+    };
+
+    function getData() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? JSON.parse(stored) : defaultData;
+    }
+
+    function saveData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      render();
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function addTask(section) {
+      const input = document.getElementById(`${section}-input`);
+      if (!input.value.trim()) return;
+      const data = getData();
+      data.tasks[section].push({
+        id: Date.now(),
+        title: input.value,
+        note: '',
+        done: false
+      });
+      input.value = '';
+      saveData(data);
+    }
+
+    function toggleTask(section, id) {
+      const data = getData();
+      const task = data.tasks[section].find(t => t.id === id);
+      if (task) task.done = !task.done;
+      saveData(data);
+    }
+
+    function deleteTask(section, id) {
+      const data = getData();
+      data.tasks[section] = data.tasks[section].filter(t => t.id !== id);
+      saveData(data);
+    }
+
+    function clearCompleted() {
+      const data = getData();
+      ['school', 'work', 'personal'].forEach(s => {
+        data.tasks[s] = data.tasks[s].filter(t => !t.done);
+      });
+      saveData(data);
+    }
+
+    function exportTasks() {
+      const data = getData();
+      const text = JSON.stringify(data.tasks, null, 2);
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tasks.json';
+      a.click();
+    }
+
+    function renderTasks() {
+      const data = getData();
+      ['school', 'work', 'personal'].forEach(section => {
+        const container = document.getElementById(`${section}-tasks`);
+        const tasks = data.tasks[section];
+        container.innerHTML = tasks.length ? tasks.map(task => `
+          <div class="task-item">
+            <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask('${section}', ${task.id})">
+            <div class="task-content">
+              <div class="task-title">${task.title}</div>
+              ${task.note ? `<div class="task-note">${task.note}</div>` : ''}
+            </div>
+            <button onclick="deleteTask('${section}', ${task.id})" style="padding: 4px 8px; font-size: 12px;">×</button>
+          </div>
+        `).join('') : '<div class="empty">No tasks</div>';
+      });
+    }
+
+    function addMemory(type) {
+      const name = prompt(`Add ${type}:`);
+      if (!name) return;
+      const data = getData();
+      if (type === 'person') data.memory.people.push({ name, role: 'Role...' });
+      else if (type === 'project') data.memory.projects.push({ name, desc: 'Description...' });
+      else if (type === 'term') data.memory.terms.push({ term: name, meaning: 'Meaning...' });
+      saveData(data);
+    }
+
+    function renderMemory() {
+      const data = getData();
+      document.getElementById('people-grid').innerHTML = data.memory.people.map(p => `
+        <div class="memory-card">
+          <h3>${p.name}</h3>
+          <p>${p.role}</p>
+        </div>
+      `).join('');
+      document.getElementById('projects-grid').innerHTML = data.memory.projects.map(p => `
+        <div class="memory-card">
+          <h3>${p.name}</h3>
+          <p>${p.desc}</p>
+        </div>
+      `).join('');
+      document.getElementById('terms-grid').innerHTML = data.memory.terms.map(t => `
+        <div class="memory-card">
+          <h3>${t.term}</h3>
+          <p>${t.meaning}</p>
+        </div>
+      `).join('');
+    }
+
+    function render() {
+      renderTasks();
+      renderMemory();
+    }
+
+    render();
+  </script>
+</body>
+</html>
