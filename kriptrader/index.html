@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KRIPTRADER &amp; KRIPUMP BOT — Crypto Trade Automation Platform</title>
+<meta name="description" content="Professional crypto trade automation. KRIPTRADER grid bot and KRIPUMP pump-tracking bot with a live WebSocket panel and secure Binance API connection.">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --bg-alt: #0f1524;
+    --card: #141b2e;
+    --card-border: #1f2a44;
+    --text: #e8ecf4;
+    --muted: #8b96ad;
+    --accent: #f0b90b;       /* binance gold */
+    --accent-dark: #c99a05;
+    --green: #16c784;
+    --red: #ea3943;
+    --radius: 14px;
+    font-size: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; }
+  .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- Ticker bar ---------- */
+  .ticker-bar {
+    background: #060910;
+    border-bottom: 1px solid var(--card-border);
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 13px;
+    padding: 6px 0;
+  }
+  .ticker-track { display: inline-block; animation: ticker 45s linear infinite; }
+  @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .tick { display: inline-block; margin: 0 22px; color: var(--muted); }
+  .tick b { color: var(--text); font-weight: 600; margin-right: 6px; }
+  .up { color: var(--green); } .down { color: var(--red); }
+
+  /* ---------- Nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,14,23,.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--card-border);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 66px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: .04em; }
+  .logo .mark {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), #ff8a00);
+    display: grid; place-items: center; color: #0a0e17; font-size: 18px; font-weight: 900;
+  }
+  .logo span.k { color: var(--accent); }
+  .nav-links { display: flex; gap: 28px; font-size: 14.5px; color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta { display: flex; gap: 12px; align-items: center; }
+  .lang { font-size: 13px; color: var(--muted); border: 1px solid var(--card-border); padding: 5px 10px; border-radius: 8px; }
+  .btn {
+    display: inline-block; padding: 11px 24px; border-radius: 10px;
+    font-weight: 700; font-size: 15px; cursor: pointer; border: none;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-gold { background: linear-gradient(135deg, var(--accent), #ff9f0a); color: #0a0e17; box-shadow: 0 4px 18px rgba(240,185,11,.28); }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--card-border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 8px 18px; font-size: 13.5px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    padding: 90px 0 70px;
+    background:
+      radial-gradient(ellipse 60% 50% at 70% 20%, rgba(240,185,11,.10), transparent),
+      radial-gradient(ellipse 50% 40% at 20% 80%, rgba(22,199,132,.07), transparent);
+  }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); background: rgba(240,185,11,.09);
+    border: 1px solid rgba(240,185,11,.25); padding: 6px 14px; border-radius: 999px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  h1 { font-size: clamp(34px, 5vw, 52px); line-height: 1.12; font-weight: 800; letter-spacing: -.01em; }
+  h1 .gold { color: var(--accent); }
+  .hero p.lead { margin: 22px 0 32px; font-size: 18px; color: var(--muted); max-width: 540px; }
+  .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero-stats { display: flex; gap: 38px; margin-top: 44px; }
+  .stat b { display: block; font-size: 26px; font-weight: 800; color: var(--text); }
+  .stat span { font-size: 13px; color: var(--muted); }
+
+  /* ---------- Panel mockup ---------- */
+  .panel {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    overflow: hidden; font-size: 13px;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--bg-alt); border-bottom: 1px solid var(--card-border);
+  }
+  .panel-head .title { font-weight: 700; }
+  .badge-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--green); }
+  .badge-live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
+  .panel-body { padding: 16px; }
+  .pair-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .pair-row .pair { font-weight: 800; font-size: 16px; }
+  #live-price { font-size: 22px; font-weight: 800; transition: color .2s; }
+  .candles { display: flex; align-items: flex-end; gap: 5px; height: 110px; margin: 10px 0 16px; }
+  .candle { flex: 1; border-radius: 2px; min-height: 8px; opacity: .9; }
+  .c-up { background: var(--green); } .c-down { background: var(--red); }
+  .orders { border-top: 1px solid var(--card-border); padding-top: 12px; }
+  .order { display: flex; justify-content: space-between; padding: 6px 0; color: var(--muted); }
+  .order .side-buy { color: var(--green); font-weight: 700; }
+  .order .side-sell { color: var(--red); font-weight: 700; }
+  .order .filled { color: var(--accent); font-size: 11.5px; }
+
+  /* ---------- Sections ---------- */
+  section { padding: 84px 0; }
+  section.alt { background: var(--bg-alt); }
+  .sec-head { text-align: center; max-width: 640px; margin: 0 auto 54px; }
+  .sec-head .eyebrow { margin-bottom: 16px; }
+  h2 { font-size: clamp(26px, 3.6vw, 36px); font-weight: 800; letter-spacing: -.01em; }
+  .sec-head p { color: var(--muted); margin-top: 14px; font-size: 16.5px; }
+
+  /* Features */
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .feat {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 28px 26px; transition: border-color .2s, transform .2s;
+  }
+  .feat:hover { border-color: rgba(240,185,11,.45); transform: translateY(-3px); }
+  .feat .icon {
+    width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+    font-size: 22px; background: rgba(240,185,11,.1); border: 1px solid rgba(240,185,11,.22); margin-bottom: 18px;
+  }
+  .feat h3 { font-size: 17.5px; margin-bottom: 8px; }
+  .feat p { font-size: 14.5px; color: var(--muted); }
+
+  /* Bots */
+  .bots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .bot-card {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 36px 32px; position: relative; overflow: hidden;
+  }
+  .bot-card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
+    background: linear-gradient(90deg, var(--accent), #ff8a00);
+  }
+  .bot-card.pump::before { background: linear-gradient(90deg, var(--green), #0ea5e9); }
+  .bot-tag { font-size: 11.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .bot-card.pump .bot-tag { color: var(--green); }
+  .bot-card h3 { font-size: 24px; margin: 10px 0 12px; }
+  .bot-card > p { color: var(--muted); font-size: 15px; margin-bottom: 20px; }
+  .bot-card ul { list-style: none; display: grid; gap: 10px; margin-bottom: 26px; }
+  .bot-card li { display: flex; gap: 10px; font-size: 14.5px; color: var(--text); }
+  .bot-card li::before { content: "✓"; color: var(--green); font-weight: 800; }
+
+  /* How it works */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; counter-reset: step; }
+  .step { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 26px 22px; }
+  .step .num {
+    counter-increment: step; width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(240,185,11,.12); border: 1px solid rgba(240,185,11,.3);
+    color: var(--accent); font-weight: 800; display: grid; place-items: center; margin-bottom: 16px;
+  }
+  .step .num::before { content: counter(step); }
+  .step h3 { font-size: 16px; margin-bottom: 6px; }
+  .step p { font-size: 13.5px; color: var(--muted); }
+
+  /* Pricing */
+  .price-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; }
+  .plan {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 30px 24px; display: flex; flex-direction: column; position: relative;
+  }
+  .plan.popular { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 18px 44px rgba(240,185,11,.12); }
+  .plan .flag {
+    position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #0a0e17; font-size: 11px; font-weight: 800;
+    letter-spacing: .08em; text-transform: uppercase; padding: 4px 14px; border-radius: 999px;
+  }
+  .plan h3 { font-size: 18px; }
+  .plan .coins { color: var(--accent); font-size: 13px; font-weight: 700; margin: 4px 0 16px; }
+  .plan .price { font-size: 34px; font-weight: 800; }
+  .plan .price small { font-size: 14px; color: var(--muted); font-weight: 500; }
+  .plan ul { list-style: none; margin: 20px 0 26px; display: grid; gap: 9px; flex: 1; }
+  .plan li { display: flex; gap: 9px; font-size: 13.5px; color: var(--muted); }
+  .plan li::before { content: "✓"; color: var(--green); font-weight: 800; }
+  .plan .btn { width: 100%; text-align: center; }
+
+  /* FAQ */
+  .faq-list { max-width: 760px; margin: 0 auto; display: grid; gap: 12px; }
+  .faq {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden;
+  }
+  .faq summary {
+    padding: 18px 22px; cursor: pointer; font-weight: 600; font-size: 15.5px;
+    list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; font-size: 22px; color: var(--accent); transition: transform .2s; }
+  .faq[open] summary::after { transform: rotate(45deg); }
+  .faq .ans { padding: 0 22px 20px; color: var(--muted); font-size: 14.5px; }
+
+  /* CTA band */
+  .cta-band {
+    text-align: center; border-radius: 20px; padding: 64px 32px;
+    background:
+      radial-gradient(ellipse 70% 90% at 50% 0%, rgba(240,185,11,.14), transparent),
+      var(--card);
+    border: 1px solid var(--card-border);
+  }
+  .cta-band h2 { margin-bottom: 12px; }
+  .cta-band p { color: var(--muted); margin-bottom: 30px; }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--card-border); padding: 54px 0 34px; background: #070b12; }
+  .foot-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 36px; margin-bottom: 40px; }
+  .foot-grid p { color: var(--muted); font-size: 13.5px; margin-top: 14px; max-width: 300px; }
+  .foot-grid h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 14px; }
+  .foot-grid ul { list-style: none; display: grid; gap: 9px; font-size: 14px; }
+  .foot-grid ul a { color: var(--text); opacity: .85; } .foot-grid ul a:hover { color: var(--accent); }
+  .foot-bottom {
+    border-top: 1px solid var(--card-border); padding-top: 24px;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    font-size: 12.5px; color: var(--muted);
+  }
+  /* Responsive */
+  .menu-btn { display: none; background: none; border: 1px solid var(--card-border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 18px; cursor: pointer; }
+  @media (max-width: 960px) {
+    .hero-grid, .bots-grid { grid-template-columns: 1fr; }
+    .feat-grid { grid-template-columns: 1fr 1fr; }
+    .steps, .price-grid { grid-template-columns: 1fr 1fr; }
+    .foot-grid { grid-template-columns: 1fr 1fr; }
+    .nav-links { display: none; }
+    .menu-btn { display: block; }
+    .nav-links.open {
+      display: flex; position: absolute; top: 66px; left: 0; right: 0;
+      flex-direction: column; gap: 0; background: var(--bg-alt);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .nav-links.open a { padding: 15px 24px; border-top: 1px solid var(--card-border); }
+  }
+  @media (max-width: 580px) {
+    .feat-grid, .steps, .price-grid, .foot-grid { grid-template-columns: 1fr; }
+    .hero { padding: 56px 0 48px; }
+    .hero-stats { gap: 24px; flex-wrap: wrap; }
+    .nav-cta .btn { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Ticker -->
+<div class="ticker-bar" aria-hidden="true">
+  <div class="ticker-track" id="ticker"></div>
+</div>
+
+<!-- Nav -->
+<nav>
+  <div class="container nav-inner">
+    <a class="logo" href="#top">
+      <span class="mark">K</span>
+      <span><span class="k">KRIP</span>TRADER</span>
+    </a>
+    <div class="nav-links" id="navLinks">
+      <a href="#features">Features</a>
+      <a href="#bots">Bots</a>
+      <a href="#how">How It Works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <span class="lang">EN ▾</span>
+      <a href="#pricing" class="btn btn-gold btn-sm">Get License</a>
+      <button class="menu-btn" onclick="document.getElementById('navLinks').classList.toggle('open')" aria-label="Menu">☰</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero" id="top">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow"><span class="dot"></span> Live 24/7 on Cloud Servers</span>
+      <h1>Crypto Trade <span class="gold">Automation</span>,<br>Built for Serious Traders</h1>
+      <p class="lead">
+        KRIPTRADER and KRIPUMP BOT — a professional bot platform with pump tracking,
+        a real-time live panel, position tracking, licensed use and a secure Binance API connection.
+        Your rules. Your funds. Our automation.
+      </p>
+      <div class="hero-ctas">
+        <a href="#pricing" class="btn btn-gold">Start Trading Automated</a>
+        <a href="#bots" class="btn btn-ghost">Explore the Bots</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><b>24/7</b><span>Cloud uptime</span></div>
+        <div class="stat"><b>&lt;10ms</b><span>WebSocket sync</span></div>
+        <div class="stat"><b>100</b><span>Coins per license</span></div>
+        <div class="stat"><b>0</b><span>Fund access needed</span></div>
+      </div>
+    </div>
+
+    <!-- Live panel mockup -->
+    <div class="panel" role="img" aria-label="Live trading panel preview">
+      <div class="panel-head">
+        <span class="title">KRIPTRADER Panel</span>
+        <span class="badge-live">LIVE · WS CONNECTED</span>
+      </div>
+      <div class="panel-body">
+        <div class="pair-row">
+          <span class="pair">BTC / USDT</span>
+          <span id="live-price" class="up">67,412.58</span>
+        </div>
+        <div class="candles" id="candles"></div>
+        <div class="orders">
+          <div class="order"><span class="side-buy">BUY</span><span>0.0421 BTC @ 67,180.00</span><span class="filled">FILLED · 0.4s</span></div>
+          <div class="order"><span class="side-sell">SELL</span><span>0.0421 BTC @ 67,455.50</span><span class="filled">FILLED · 0.2s</span></div>
+          <div class="order"><span class="side-buy">BUY</span><span>0.0435 BTC @ 66,940.00</span><span style="color:var(--muted);font-size:11.5px">OPEN</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="sec-head">
+      <span class="eyebrow">Why KRIPTRADER</span>
+      <h2>The Bot Works. You Live Your Life.</h2>
+      <p>A trading tool that implements <em>your</em> rules — it never invents its own strategy with your money.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="icon">☁️</div>
+        <h3>24/7 Cloud Operation</h3>
+        <p>Bots run on cloud servers around the clock — even while your own devices are offline, your bot continues to work for you while you sleep.</p>
+      </div>
+      <div class="feat">
+        <div class="icon">🔒</div>
+        <h3>Your Funds Stay Yours</h3>
+        <p>Funds remain completely in your Binance account. You create an API key with withdrawal disabled — the platform never has access to your money.</p>
+      </div>
+      <div class="feat">
+        <div class="icon">⚡</div>
+        <h3>WebSocket Live Panel</h3>
+        <p>No old-generation polling. Orders and price movements on the exchange are reflected in your panel within milliseconds, one-to-one with the market.</p>
+      </div>
+      <div class="feat">
+        <div class="icon">📱</div>
+        <h3>Mobile-Compatible Panel</h3>
+        <p>Watch, monitor and manually adjust your bot settings from your phone, tablet or computer — the web panel goes wherever you go.</p>
+      </div>
+      <div class="feat">
+        <div class="icon">🎛️</div>
+        <h3>You Set the Rules</h3>
+        <p>You determine the buy threshold, sell threshold, purchase amount, and market/limit choice. The bot is a disciplined executor of your strategy.</p>
+      </div>
+      <div class="feat">
+        <div class="icon">🔑</div>
+        <h3>Encrypted Licensing</h3>
+        <p>Your license is encrypted inside the bot itself — even if the central server has problems, your bot keeps running without interruption.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Bots -->
+<section class="alt" id="bots">
+  <div class="container">
+    <div class="sec-head">
+      <span class="eyebrow">Two Bots. One Platform.</span>
+      <h2>Choose Your Strategy — or Run Both</h2>
+      <p>KRIPTRADER and KRIPUMP can run simultaneously with separate licenses, side by side on the same account.</p>
+    </div>
+    <div class="bots-grid">
+      <div class="bot-card">
+        <span class="bot-tag">Grid Strategy</span>
+        <h3>KRIPTRADER BOT</h3>
+        <p>The patient accumulator. Buys your chosen coins when price dips below your threshold, sells when it climbs above your target — over and over, 24 hours a day.</p>
+        <ul>
+          <li>Custom buy &amp; sell thresholds per coin</li>
+          <li>Market or limit order execution — your choice</li>
+          <li>Manage 1 to 100 coins simultaneously</li>
+          <li>Position tracking with live P&amp;L</li>
+          <li>Manual override anytime from the panel</li>
+        </ul>
+        <a href="#pricing" class="btn btn-gold btn-sm">Get KRIPTRADER</a>
+      </div>
+      <div class="bot-card pump">
+        <span class="bot-tag">Pump Tracking</span>
+        <h3>KRIPUMP BOT</h3>
+        <p>The sprinter. A pump-tracking system that detects sudden volume and price acceleration across the market and rides the move — entry, target, and stop, all automated.</p>
+        <ul>
+          <li>Real-time pump detection across Binance pairs</li>
+          <li>Instant entry with configurable position size</li>
+          <li>Automatic take-profit and stop-loss</li>
+          <li>Millisecond order reflection via WebSocket</li>
+          <li>Runs alongside KRIPTRADER on one account</li>
+        </ul>
+        <a href="#pricing" class="btn btn-gold btn-sm">Get KRIPUMP</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how">
+  <div class="container">
+    <div class="sec-head">
+      <span class="eyebrow">Setup in Minutes</span>
+      <h2>How It Works</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num"></div>
+        <h3>Create Your API Key</h3>
+        <p>Generate a Binance API key with trade permission only — withdrawals stay disabled, so your funds never leave your account.</p>
+      </div>
+      <div class="step">
+        <div class="num"></div>
+        <h3>Choose Your License</h3>
+        <p>Pick a plan by how many coins you want to manage — from a single coin to a hundred at once.</p>
+      </div>
+      <div class="step">
+        <div class="num"></div>
+        <h3>Set Your Rules</h3>
+        <p>Define buy thresholds, sell targets, amounts and order types in the panel. The bot executes exactly what you configure.</p>
+      </div>
+      <div class="step">
+        <div class="num"></div>
+        <h3>Monitor Anywhere</h3>
+        <p>Track every position live from phone, tablet or desktop — and adjust settings on the fly while the bot works 24/7.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="alt" id="pricing">
+  <div class="container">
+    <div class="sec-head">
+      <span class="eyebrow">Licenses</span>
+      <h2>Simple, Coin-Based Pricing</h2>
+      <p>Every plan includes the live WebSocket panel, cloud operation, position tracking and encrypted licensing.</p>
+    </div>
+    <div class="price-grid">
+      <div class="plan">
+        <h3>Rookie</h3>
+        <div class="coins">1 coin</div>
+        <div class="price">$19<small>/month</small></div>
+        <ul>
+          <li>Single coin management</li>
+          <li>Live WebSocket panel</li>
+          <li>24/7 cloud operation</li>
+          <li>Email support</li>
+        </ul>
+        <a href="#contact" class="btn btn-ghost">Choose Rookie</a>
+      </div>
+      <div class="plan">
+        <h3>Trader</h3>
+        <div class="coins">10 coins</div>
+        <div class="price">$49<small>/month</small></div>
+        <ul>
+          <li>Up to 10 coins simultaneously</li>
+          <li>Live WebSocket panel</li>
+          <li>24/7 cloud operation</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#contact" class="btn btn-ghost">Choose Trader</a>
+      </div>
+      <div class="plan popular">
+        <span class="flag">Most Popular</span>
+        <h3>Pro</h3>
+        <div class="coins">40 coins</div>
+        <div class="price">$99<small>/month</small></div>
+        <ul>
+          <li>Up to 40 coins simultaneously</li>
+          <li>KRIPTRADER + KRIPUMP bundle</li>
+          <li>Live WebSocket panel</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#contact" class="btn btn-gold">Choose Pro</a>
+      </div>
+      <div class="plan">
+        <h3>Whale</h3>
+        <div class="coins">100 coins</div>
+        <div class="price">$199<small>/month</small></div>
+        <ul>
+          <li>Up to 100 coins simultaneously</li>
+          <li>KRIPTRADER + KRIPUMP bundle</li>
+          <li>Dedicated onboarding</li>
+          <li>1-on-1 support channel</li>
+        </ul>
+        <a href="#contact" class="btn btn-ghost">Choose Whale</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container">
+    <div class="sec-head">
+      <span class="eyebrow">Questions</span>
+      <h2>Frequently Asked Questions</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq" open>
+        <summary>Can the platform access my funds?</summary>
+        <div class="ans">No. Your funds remain completely in your Binance account. You create an API key with trade authorization only and withdrawals disabled — the platform can place orders on your behalf but can never move money out of your account.</div>
+      </details>
+      <details class="faq">
+        <summary>Does the bot decide its own strategy?</summary>
+        <div class="ans">No. The bot is a tool that implements your rules. You set the buy threshold, sell threshold, purchase amount and market/limit choice — it executes your configuration with machine discipline, nothing more.</div>
+      </details>
+      <details class="faq">
+        <summary>Does the bot keep working when my computer is off?</summary>
+        <div class="ans">Yes. Bots run 24/7 on cloud servers, so they continue working while you sleep or your devices are offline. The mobile-compatible web panel lets you check in from anywhere.</div>
+      </details>
+      <details class="faq">
+        <summary>How fast is the panel compared to the exchange?</summary>
+        <div class="ans">The panel uses WebSocket technology rather than old-generation polling, so order fills and price movements on the exchange are reflected on your screen within milliseconds — almost one-to-one with Binance.</div>
+      </details>
+      <details class="faq">
+        <summary>Can I run KRIPTRADER and KRIPUMP at the same time?</summary>
+        <div class="ans">Yes. The two bots can run simultaneously on the same account with separate licenses — grid accumulation and pump tracking working side by side.</div>
+      </details>
+      <details class="faq">
+        <summary>What happens if the central server goes down?</summary>
+        <div class="ans">Your license is encrypted inside the bot itself, so even if there are problems on the central server, your bot's license continues to work and trading is not interrupted.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- CTA band -->
+<section class="alt" id="contact" style="padding-top:0">
+  <div class="container">
+    <div class="cta-band">
+      <h2>Ready to Put Your Strategy on Autopilot?</h2>
+      <p>Get your license, connect your Binance API key, and let the bot take the night shift.</p>
+      <a href="#pricing" class="btn btn-gold">Get Your License Now</a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="foot-grid">
+      <div>
+        <a class="logo" href="#top">
+          <span class="mark">K</span>
+          <span><span class="k">KRIP</span>TRADER</span>
+        </a>
+        <p>Professional crypto trade automation platform. KRIPTRADER grid bot and KRIPUMP pump-tracking bot with secure Binance API connection.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#bots">KRIPTRADER BOT</a></li>
+          <li><a href="#bots">KRIPUMP BOT</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#features">Features</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="#how">Getting Started</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#contact">Support</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#">Terms of Use</a></li>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Risk Disclosure</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 KRIPTRADER. All rights reserved.</span>
+      <span>Crypto assets are volatile. Automated trading does not guarantee profit — trade responsibly.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Scrolling ticker (static demo data, duplicated for seamless loop)
+  const coins = [
+    ['BTC', '67,412.58', '+2.41'], ['ETH', '3,528.10', '+1.87'], ['BNB', '592.33', '+0.94'],
+    ['SOL', '148.72', '-1.12'], ['XRP', '0.6231', '+3.05'], ['ADA', '0.4718', '-0.58'],
+    ['DOGE', '0.1382', '+5.21'], ['AVAX', '35.09', '+0.42'], ['DOT', '6.84', '-0.77'],
+    ['LINK', '17.93', '+2.10']
+  ];
+  const tickHTML = coins.map(([s, p, c]) =>
+    `<span class="tick"><b>${s}/USDT</b> ${p} <span class="${c.startsWith('+') ? 'up' : 'down'}">${c}%</span></span>`
+  ).join('');
+  document.getElementById('ticker').innerHTML = tickHTML + tickHTML;
+
+  // Decorative candle bars in the panel mockup
+  const heights = [34,48,42,58,52,66,60,74,64,80,72,88,78,70,84,92,86,98,90,104];
+  document.getElementById('candles').innerHTML = heights.map((h, i) =>
+    `<div class="candle ${h >= (heights[i-1] ?? h) ? 'c-up' : 'c-down'}" style="height:${h}px"></div>`
+  ).join('');
+
+  // Gentle live-price animation on the mockup
+  const priceEl = document.getElementById('live-price');
+  let price = 67412.58;
+  setInterval(() => {
+    const delta = (Math.random() - 0.48) * 18;
+    price = Math.max(60000, price + delta);
+    priceEl.textContent = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    priceEl.className = delta >= 0 ? 'up' : 'down';
+  }, 1400);
+
+  // Close mobile menu after choosing a link
+  document.querySelectorAll('#navLinks a').forEach(a =>
+    a.addEventListener('click', () => document.getElementById('navLinks').classList.remove('open')));
+</script>
+</body>
+</html>
