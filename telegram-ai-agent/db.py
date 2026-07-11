@@ -36,6 +36,12 @@ CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS ignored (
+    chat_id INTEGER PRIMARY KEY,
+    name TEXT,
+    created_at REAL
+);
 """
 
 _conn = None
@@ -109,6 +115,14 @@ def find_draft_by_admin_reply(replied_msg_id: int) -> sqlite3.Row | None:
     ).fetchone()
 
 
+def get_pending_by_chat(chat_id: int) -> sqlite3.Row | None:
+    return conn().execute(
+        "SELECT * FROM drafts WHERE chat_id = ? AND status = 'pending' "
+        "ORDER BY id DESC LIMIT 1",
+        (chat_id,),
+    ).fetchone()
+
+
 def decide_draft(draft_id: int, status: str, final_reply: str | None) -> None:
     c = conn()
     c.execute(
@@ -149,6 +163,37 @@ def stats() -> dict:
         "SELECT status, COUNT(*) AS n FROM drafts GROUP BY status"
     ).fetchall()
     return {r["status"]: r["n"] for r in rows}
+
+
+# --- ignored chats (friends/family/non-customers) ---
+
+def ignore_chat(chat_id: int, name: str) -> None:
+    c = conn()
+    c.execute(
+        "INSERT INTO ignored (chat_id, name, created_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(chat_id) DO NOTHING",
+        (chat_id, name, time.time()),
+    )
+    c.commit()
+
+
+def unignore_chat(chat_id: int) -> bool:
+    c = conn()
+    cur = c.execute("DELETE FROM ignored WHERE chat_id = ?", (chat_id,))
+    c.commit()
+    return cur.rowcount > 0
+
+
+def is_ignored(chat_id: int) -> bool:
+    return conn().execute(
+        "SELECT 1 FROM ignored WHERE chat_id = ?", (chat_id,)
+    ).fetchone() is not None
+
+
+def ignored_list() -> list[sqlite3.Row]:
+    return conn().execute(
+        "SELECT chat_id, name FROM ignored ORDER BY created_at DESC"
+    ).fetchall()
 
 
 # --- key/value (style guide, counters) ---

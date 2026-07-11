@@ -1,8 +1,12 @@
-"""Gold Club Telegram AI agent.
+"""Gold Club Telegram AI agent — personal-account edition.
 
-Customers message the bot; Claude drafts a reply; the support worker gets the
-draft with Send / Edit / Reject buttons and every decision feeds back into a
-learned style guide.
+A Telethon client logged in as YOUR personal Telegram account receives
+customer DMs. Claude drafts a reply, a companion approval bot shows it to
+your support worker with Send / Edit / Reject buttons, and the approved text
+is sent from your personal account — so customers just see you answering.
+
+Manual replies sent straight from your phone are picked up too and feed the
+same style-learning loop.
 """
 
 import asyncio
@@ -15,6 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from telethon import TelegramClient, events
 from telegram import ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -32,19 +37,26 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s", level=logging.INFO
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telethon").setLevel(logging.WARNING)
 log = logging.getLogger("goldclub")
 
+# Personal account (get these at https://my.telegram.org → API development tools)
+TG_API_ID = int(os.environ["TG_API_ID"])
+TG_API_HASH = os.environ["TG_API_HASH"]
+SESSION_NAME = os.environ.get("SESSION_NAME", "goldclub_user")
+
+# Approval bot (the worker's control panel)
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "0"))
+
 STYLE_UPDATE_EVERY = int(os.environ.get("STYLE_UPDATE_EVERY", "10"))
 KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), "knowledge.md")
 
-WELCOME = (
-    "Welcome to Gold Club! 🌟\n\n"
-    "Send us your question — plans, pricing, setup help, anything — "
-    "and we'll get right back to you."
-)
-
+TG: TelegramClient | None = None   # personal account client
+BOT = None                         # approval bot (telegram.Bot)
+ME_ID: int | None = None           # personal account user id
+AGENT_SENT: set[int] = set()       # message ids we sent, so the outgoing
+                                   # handler doesn't treat them as manual replies
 _style_task_running = False
 
 
@@ -56,6 +68,14 @@ def load_knowledge() -> str:
         return "(no business knowledge file found — knowledge.md is missing)"
 
 
+def peer_name(user) -> str:
+    name = " ".join(filter(None, [getattr(user, "first_name", None),
+                                  getattr(user, "last_name", None)])) or "Customer"
+    if getattr(user, "username", None):
+        name += f" (@{user.username})"
+    return name
+
+
 def review_keyboard(draft_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -63,16 +83,16 @@ def review_keyboard(draft_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("✅ Send", callback_data=f"a:{draft_id}"),
                 InlineKeyboardButton("✏️ Edit", callback_data=f"e:{draft_id}"),
                 InlineKeyboardButton("❌ Reject", callback_data=f"r:{draft_id}"),
-            ]
+            ],
+            [InlineKeyboardButton("🔕 Ignore this chat", callback_data=f"i:{draft_id}")],
         ]
     )
 
 
 def review_text(draft, status_line: str = "") -> str:
     cat = (draft["category"] or "?").upper()
-    head = f"🆕 Draft #{draft['id']} · {cat}"
     body = (
-        f"{head}\n"
+        f"🆕 Draft #{draft['id']} · {cat}\n"
         f"👤 {html.escape(draft['customer_name'] or 'Customer')}\n\n"
         f"💬 <b>Customer:</b>\n{html.escape(draft['customer_message'])}\n\n"
         f"🤖 <b>Suggested reply:</b>\n{html.escape(draft['ai_draft'])}"
@@ -82,40 +102,49 @@ def review_text(draft, status_line: str = "") -> str:
     return body
 
 
-# --- customer side ---
-
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_chat.id == ADMIN_CHAT_ID:
-        await update.message.reply_text(
-            "Admin chat registered. New customer messages will arrive here as "
-            "drafts with Send / Edit / Reject buttons.\n"
-            "Commands: /stats /style /relearn"
+async def update_card(draft, status_line: str) -> None:
+    if not draft["admin_msg_id"]:
+        return
+    try:
+        await BOT.edit_message_text(
+            chat_id=ADMIN_CHAT_ID,
+            message_id=draft["admin_msg_id"],
+            text=review_text(draft, status_line),
+            parse_mode="HTML",
         )
-    else:
-        await update.message.reply_text(WELCOME)
+    except Exception:
+        pass  # card may be too old to edit — not critical
 
 
-async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Setup helper: shows the chat id to put in ADMIN_CHAT_ID."""
-    await update.message.reply_text(f"This chat's ID: {update.effective_chat.id}")
+# --- personal account: incoming customer messages ---
 
-
-async def handle_customer_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.message
-    chat_id = update.effective_chat.id
-    text = msg.text
-
+async def on_incoming(event) -> None:
+    if not event.is_private:
+        return
+    peer = await event.get_chat()
+    if peer is None or getattr(peer, "bot", False) or event.chat_id == ME_ID:
+        return
+    if db.is_ignored(event.chat_id):
+        return
     if not ADMIN_CHAT_ID:
         log.warning("Customer message received but ADMIN_CHAT_ID is not set.")
         return
 
-    user = update.effective_user
-    name = user.full_name + (f" (@{user.username})" if user.username else "")
+    name = peer_name(peer)
+    text = (event.raw_text or "").strip()
 
-    history = db.get_history(chat_id)
-    db.add_message(chat_id, "customer", text)
+    if not text:
+        await BOT.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=(f"📎 Media/voice message from <b>{html.escape(name)}</b> — "
+                  "open Telegram to handle it manually."),
+            parse_mode="HTML",
+        )
+        return
 
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    history = db.get_history(event.chat_id)
+    db.add_message(event.chat_id, "customer", text)
+
     try:
         category, reply = await ai.draft_reply(
             customer_message=text,
@@ -129,20 +158,17 @@ async def handle_customer_message(update: Update, context: ContextTypes.DEFAULT_
         category, reply = "other", ""
 
     if not reply:
-        await context.bot.send_message(
+        await BOT.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=(
-                f"⚠️ Could not draft a reply for {html.escape(name)}.\n\n"
-                f"💬 {html.escape(text)}\n\n"
-                "Please answer them manually."
-            ),
+            text=(f"⚠️ Could not draft a reply for <b>{html.escape(name)}</b>.\n\n"
+                  f"💬 {html.escape(text)}\n\nPlease answer them manually."),
             parse_mode="HTML",
         )
         return
 
-    draft_id = db.create_draft(chat_id, name, text, category, reply)
+    draft_id = db.create_draft(event.chat_id, name, text, category, reply)
     draft = db.get_draft(draft_id)
-    review = await context.bot.send_message(
+    review = await BOT.send_message(
         chat_id=ADMIN_CHAT_ID,
         text=review_text(draft),
         parse_mode="HTML",
@@ -151,29 +177,55 @@ async def handle_customer_message(update: Update, context: ContextTypes.DEFAULT_
     db.set_admin_msg(draft_id, review.message_id)
 
 
-async def handle_customer_nontext(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Photos, voice notes, payment screenshots etc. — hand straight to the worker."""
-    if not ADMIN_CHAT_ID:
+# --- personal account: manual replies typed on the phone/desktop ---
+
+async def on_outgoing(event) -> None:
+    if not event.is_private:
         return
-    user = update.effective_user
-    name = user.full_name + (f" (@{user.username})" if user.username else "")
-    await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
-        text=f"📎 Non-text message from {html.escape(name)} — forwarded below, handle manually.",
-        parse_mode="HTML",
-    )
-    await update.message.forward(chat_id=ADMIN_CHAT_ID)
+    if event.message.id in AGENT_SENT:
+        AGENT_SENT.discard(event.message.id)
+        return  # this one was sent by the agent itself
+    if event.chat_id == ME_ID:
+        return
+    peer = await event.get_chat()
+    if peer is None or getattr(peer, "bot", False):
+        return
+    text = (event.raw_text or "").strip()
+    if not text:
+        return
+
+    db.add_message(event.chat_id, "agent", text)
+
+    # If a draft was waiting for this chat, the manual reply supersedes it —
+    # and it's a learning signal (worker's answer vs the AI draft).
+    draft = db.get_pending_by_chat(event.chat_id)
+    if draft:
+        status = "approved" if text == draft["ai_draft"].strip() else "edited"
+        db.decide_draft(draft["id"], status, text)
+        await update_card(
+            draft,
+            "📱 <b>Answered manually from the account:</b>\n" + html.escape(text),
+        )
+        asyncio.create_task(maybe_update_style())
 
 
-# --- worker side ---
+# --- delivery (always from the personal account) ---
 
-async def _deliver(context, draft, final_text: str, status: str) -> None:
-    """Send the final reply to the customer and record the decision."""
-    await context.bot.send_message(chat_id=draft["chat_id"], text=final_text)
+async def _deliver(draft, final_text: str, status: str) -> None:
+    try:
+        await TG.send_read_acknowledge(draft["chat_id"])
+    except Exception:
+        pass
+    sent = await TG.send_message(draft["chat_id"], final_text)
+    AGENT_SENT.add(sent.id)
+    if len(AGENT_SENT) > 1000:
+        AGENT_SENT.clear()  # stale ids only; in-flight window is seconds
     db.add_message(draft["chat_id"], "agent", final_text)
     db.decide_draft(draft["id"], status, final_text)
-    asyncio.create_task(maybe_update_style(context))
+    asyncio.create_task(maybe_update_style())
 
+
+# --- approval bot: buttons ---
 
 async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -185,7 +237,12 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if action == "a":
-        await _deliver(context, draft, draft["ai_draft"], "approved")
+        try:
+            await _deliver(draft, draft["ai_draft"], "approved")
+        except Exception:
+            log.exception("Send failed")
+            await query.answer("⚠️ Sending failed — check the logs.", show_alert=True)
+            return
         await query.answer("Sent ✅")
         await query.edit_message_text(
             review_text(draft, "✅ <b>Sent as-is.</b>"), parse_mode="HTML"
@@ -213,9 +270,23 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         db.set_edit_msg(draft["id"], prompt.message_id)
 
+    elif action == "i":
+        db.decide_draft(draft["id"], "rejected", None)
+        db.ignore_chat(draft["chat_id"], draft["customer_name"] or "")
+        await query.answer("Chat ignored 🔕")
+        await query.edit_message_text(
+            review_text(
+                draft,
+                "🔕 <b>Chat ignored</b> — no more drafts for this person. "
+                "Use /ignored to review, /unignore &lt;id&gt; to undo.",
+            ),
+            parse_mode="HTML",
+        )
+
+
+# --- approval bot: worker replies = final answers ---
 
 async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """A worker's reply to a review message (or edit prompt) is the final answer."""
     msg = update.message
     if not msg.reply_to_message:
         return
@@ -225,26 +296,25 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     final_text = msg.text.strip()
     status = "approved" if final_text == draft["ai_draft"].strip() else "edited"
-    await _deliver(context, draft, final_text, status)
-
-    label = "✏️ <b>Sent (edited)</b>" if status == "edited" else "✅ <b>Sent as-is.</b>"
-    note = f"{label}\n\n<b>Final reply:</b>\n{html.escape(final_text)}" \
-        if status == "edited" else label
     try:
-        await context.bot.edit_message_text(
-            chat_id=ADMIN_CHAT_ID,
-            message_id=draft["admin_msg_id"],
-            text=review_text(draft, note),
-            parse_mode="HTML",
-        )
+        await _deliver(draft, final_text, status)
     except Exception:
-        pass  # review message may be too old to edit — the reply below still confirms
+        log.exception("Send failed")
+        await msg.reply_text("⚠️ Sending failed — check the logs.")
+        return
+
+    if status == "edited":
+        note = ("✏️ <b>Sent (edited).</b>\n\n<b>Final reply:</b>\n"
+                + html.escape(final_text))
+    else:
+        note = "✅ <b>Sent as-is.</b>"
+    await update_card(draft, note)
     await msg.reply_text("Sent to the customer 👍")
 
 
 # --- learning ---
 
-async def maybe_update_style(context: ContextTypes.DEFAULT_TYPE, force: bool = False) -> None:
+async def maybe_update_style(force: bool = False) -> None:
     global _style_task_running
     if _style_task_running:
         return
@@ -267,7 +337,7 @@ async def maybe_update_style(context: ContextTypes.DEFAULT_TYPE, force: bool = F
             db.kv_set("style_updated_at", str(int(time.time())))
             log.info("Style guide updated (%d decided drafts).", decided)
             if force and ADMIN_CHAT_ID:
-                await context.bot.send_message(
+                await BOT.send_message(
                     chat_id=ADMIN_CHAT_ID,
                     text="🧠 Style guide updated:\n\n" + guide,
                 )
@@ -277,7 +347,21 @@ async def maybe_update_style(context: ContextTypes.DEFAULT_TYPE, force: bool = F
         _style_task_running = False
 
 
-# --- admin commands ---
+# --- approval bot: commands ---
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Gold Club approval panel.\n\n"
+        "Drafts for incoming customer DMs will appear here with "
+        "Send / Edit / Reject buttons.\n"
+        "Commands: /stats /style /relearn /ignored /unignore /id"
+    )
+
+
+async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Setup helper: shows the chat id to put in ADMIN_CHAT_ID."""
+    await update.message.reply_text(f"This chat's ID: {update.effective_chat.id}")
+
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = db.stats()
@@ -306,13 +390,37 @@ async def cmd_relearn(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("No edited drafts yet — nothing to learn from.")
         return
     await update.message.reply_text("Re-learning style from recent edits…")
-    await maybe_update_style(context, force=True)
+    await maybe_update_style(force=True)
 
 
-def main() -> None:
-    db.conn()  # create tables up front
+async def cmd_ignored(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    rows = db.ignored_list()
+    if not rows:
+        await update.message.reply_text("No ignored chats.")
+        return
+    lines = [f"• {r['name'] or 'Unknown'} — /unignore {r['chat_id']}" for r in rows]
+    await update.message.reply_text("🔕 Ignored chats:\n" + "\n".join(lines))
+
+
+async def cmd_unignore(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.message.reply_text("Usage: /unignore <chat_id> (see /ignored)")
+        return
+    try:
+        chat_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("That's not a chat id. See /ignored.")
+        return
+    if db.unignore_chat(chat_id):
+        await update.message.reply_text("Un-ignored — drafts resume for that chat. ✅")
+    else:
+        await update.message.reply_text("That chat wasn't on the ignore list.")
+
+
+# --- wiring ---
+
+def build_approval_bot() -> Application:
     app = Application.builder().token(BOT_TOKEN).build()
-
     admin = filters.Chat(ADMIN_CHAT_ID) if ADMIN_CHAT_ID else filters.Chat(-1)
 
     app.add_handler(CommandHandler("id", cmd_id))
@@ -320,22 +428,44 @@ def main() -> None:
     app.add_handler(CommandHandler("stats", cmd_stats, filters=admin))
     app.add_handler(CommandHandler("style", cmd_style, filters=admin))
     app.add_handler(CommandHandler("relearn", cmd_relearn, filters=admin))
-
+    app.add_handler(CommandHandler("ignored", cmd_ignored, filters=admin))
+    app.add_handler(CommandHandler("unignore", cmd_unignore, filters=admin))
     app.add_handler(CallbackQueryHandler(on_button))
     app.add_handler(MessageHandler(admin & filters.TEXT & ~filters.COMMAND,
                                    handle_admin_message))
-    app.add_handler(MessageHandler(
-        filters.ChatType.PRIVATE & ~admin & filters.TEXT & ~filters.COMMAND,
-        handle_customer_message,
-    ))
-    app.add_handler(MessageHandler(
-        filters.ChatType.PRIVATE & ~admin & ~filters.TEXT & ~filters.COMMAND,
-        handle_customer_nontext,
-    ))
+    return app
 
-    log.info("Gold Club agent starting (admin chat: %s)…", ADMIN_CHAT_ID or "NOT SET")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+async def main() -> None:
+    global TG, BOT, ME_ID
+    db.conn()  # create tables up front
+
+    TG = TelegramClient(SESSION_NAME, TG_API_ID, TG_API_HASH)
+    TG.add_event_handler(on_incoming, events.NewMessage(incoming=True))
+    TG.add_event_handler(on_outgoing, events.NewMessage(outgoing=True))
+
+    app = build_approval_bot()
+    async with app:  # approval bot first, so review cards can always be sent
+        BOT = app.bot
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        await app.start()
+        log.info("Approval bot running (admin chat: %s)…", ADMIN_CHAT_ID or "NOT SET")
+
+        # First run prompts for your phone number + login code in the terminal,
+        # then saves a session file so later runs are non-interactive.
+        await TG.start()
+        me = await TG.get_me()
+        ME_ID = me.id
+        log.info("Personal account connected: %s (id %s)", peer_name(me), me.id)
+        try:
+            await TG.run_until_disconnected()
+        finally:
+            await app.updater.stop()
+            await app.stop()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        pass
