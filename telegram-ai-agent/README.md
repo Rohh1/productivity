@@ -54,25 +54,24 @@ edit yourself — the AI is instructed never to invent pricing or promises.
 2. **Create the approval bot**: talk to [@BotFather](https://t.me/BotFather)
    → `/newbot` → copy the token.
 
-3. **Install & configure**:
+3. **Install, configure & start — one command**:
 
    ```bash
    cd telegram-ai-agent
-   python3 -m venv venv && source venv/bin/activate
-   pip install -r requirements.txt
-   cp .env.example .env   # then edit .env
+   ./setup.sh
    ```
 
-4. **First run (interactive — do this in a terminal)**:
+   The script installs everything, asks for the credentials from steps 1–2
+   (plus your Anthropic API key), writes `.env`, and starts the bot.
+   Manual alternative: `pip install -r requirements.txt`, copy `.env.example`
+   to `.env`, edit it, run `python bot.py`.
 
-   ```bash
-   python bot.py
-   ```
-
-   It asks for your phone number, the login code Telegram sends you, and your
-   2FA password if you have one. That creates `goldclub_user.session` — later
-   runs (and server deployments) are fully non-interactive. **Treat the
-   .session file like a password**; it's full access to your account.
+4. **First run is interactive**: it asks for your phone number, the login
+   code Telegram sends you, and your 2FA password if you have one. Never
+   share that code with anyone — type it only into the terminal. This creates
+   `goldclub_user.session`; later runs (and server deployments) are fully
+   non-interactive. **Treat the .session file like a password** — it's full
+   access to your account.
 
 5. **Set the admin chat**: from the support worker's account (or a private
    staff group the bot was added to), send `/id` to the approval bot, put the
@@ -140,7 +139,9 @@ prompt caching), so repeat messages are cheap.
 ## Running 24/7
 
 Do the first interactive login on your own machine, then copy the folder
-(including the `.session` file) to a small VPS. Example systemd unit:
+(including the `.session` file, minus `venv/`) to a small VPS and run
+`./setup.sh` there once — it rebuilds the venv and reuses your existing
+`.env` and session. For always-on operation use systemd. Example unit:
 
 ```ini
 [Unit]
