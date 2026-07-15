@@ -13,11 +13,19 @@ export function createCall(data) {
     goal: data.goal,
     persona: data.persona || "",
     callerName: data.callerName || "",
+    // Sensitive: entered as DTMF when the far end asks for it. Never exposed
+    // over the API (see publicCall) and never shown in the transcript.
+    accountNumber: data.accountNumber || "",
+    // true  = we speak first (reaching a human)
+    // false = we listen first (automated menu / IVR)
+    speakFirst: Boolean(data.speakFirst),
+    simulated: Boolean(data.simulated),
     status: "queued", // queued | ringing | in-progress | completed | voicemail | no-response | error | busy | no-answer | canceled | failed
     twilioSid: null,
     twilioStatus: null,
     opening: "",
     turns: [], // { role: "assistant" | "user", text, at }
+    result: "", // the key finding the AI extracted (the "return")
     emptyCount: 0,
     error: null,
     createdAt: new Date().toISOString(),
@@ -25,6 +33,13 @@ export function createCall(data) {
   };
   calls.set(id, call);
   return call;
+}
+
+// API-safe view of a call: strips the account number.
+export function publicCall(call) {
+  if (!call) return call;
+  const { accountNumber, ...rest } = call;
+  return rest;
 }
 
 export function getCall(id) {

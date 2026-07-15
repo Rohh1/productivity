@@ -29,11 +29,20 @@
         </label>
         <label>
           Goal of the call
-          <textarea id="goal" rows="3" placeholder="e.g. Book a table for 4 tonight at 7pm under the name Rohan, and ask if they have outdoor seating." required></textarea>
+          <textarea id="goal" rows="3" placeholder="e.g. Get my current account balance and whether autopay is on." required></textarea>
+        </label>
+        <label>
+          Account number / digits to enter <span class="optional">(optional)</span>
+          <input type="text" id="accountNumber" inputmode="numeric" placeholder="e.g. 48291" autocomplete="off" />
+          <span class="hint">Stays on your own server. It's entered as keypad tones only when the line asks for it, and never shown in the transcript.</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="ivrMode" checked />
+          <span>Support line / automated menu — listen first and press keys to navigate</span>
         </label>
         <label>
           Persona <span class="optional">(optional)</span>
-          <input type="text" id="persona" placeholder="e.g. a warm, upbeat personal assistant" autocomplete="off" />
+          <input type="text" id="persona" placeholder="e.g. a calm, efficient assistant" autocomplete="off" />
         </label>
         <button type="submit" id="submit-btn">Place call</button>
         <span id="form-error" class="error"></span>

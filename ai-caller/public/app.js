@@ -41,8 +41,11 @@ function renderTurns(turns) {
     return `<div class="transcript-empty">Waiting for the conversation to start…</div>`;
   }
   return turns.map((t) => {
-    const who = t.role === "assistant" ? "AI" : "Them";
-    return `<div class="turn ${t.role === "assistant" ? "assistant" : "user"}">
+    const isAI = t.role === "assistant";
+    const isKey = isAI && /^(Pressed |Entered )/.test(t.text);
+    const who = isAI ? (isKey ? "AI · keypad" : "AI") : "Them";
+    const cls = isAI ? (isKey ? "assistant keys" : "assistant") : "user";
+    return `<div class="turn ${cls}">
       <span class="who">${who}</span>${esc(t.text)}
     </div>`;
   }).join("");
@@ -61,6 +64,7 @@ function renderCall(call) {
       <span class="status ${meta.cls}">${dot}${esc(meta.label)}</span>
     </div>
     <div class="call-goal">Goal: ${esc(call.goal)}</div>
+    ${call.result ? `<div class="result"><span class="result-label">Result</span>${esc(call.result)}</div>` : ""}
     ${call.error ? `<div class="error">${esc(call.error)}</div>` : ""}
     <div class="transcript">${renderTurns(call.turns)}</div>
   </div>`;
@@ -135,6 +139,9 @@ form.addEventListener("submit", async (e) => {
     calleeName: document.getElementById("calleeName").value.trim(),
     goal: document.getElementById("goal").value.trim(),
     persona: document.getElementById("persona").value.trim(),
+    accountNumber: document.getElementById("accountNumber").value.trim(),
+    // IVR mode = listen first; unchecked = we speak first (reaching a human).
+    speakFirst: !document.getElementById("ivrMode").checked,
   };
 
   try {
