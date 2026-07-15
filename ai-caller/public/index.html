@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Caller</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Caller</h1>
+    <p class="subtitle">Give the AI a phone number and a goal. It makes the call and talks for you.</p>
+  </header>
+
+  <div id="config-banner" class="banner hidden"></div>
+
+  <main>
+    <section class="card">
+      <h2>New call</h2>
+      <form id="call-form">
+        <label>
+          Phone number
+          <input type="tel" id="to" placeholder="+14155550123" autocomplete="off" required />
+          <span class="hint">E.164 format, including country code.</span>
+        </label>
+        <label>
+          Who are we calling? <span class="optional">(optional)</span>
+          <input type="text" id="calleeName" placeholder="e.g. Luigi's Pizzeria" autocomplete="off" />
+        </label>
+        <label>
+          Goal of the call
+          <textarea id="goal" rows="3" placeholder="e.g. Book a table for 4 tonight at 7pm under the name Rohan, and ask if they have outdoor seating." required></textarea>
+        </label>
+        <label>
+          Persona <span class="optional">(optional)</span>
+          <input type="text" id="persona" placeholder="e.g. a warm, upbeat personal assistant" autocomplete="off" />
+        </label>
+        <button type="submit" id="submit-btn">Place call</button>
+        <span id="form-error" class="error"></span>
+      </form>
+    </section>
+
+    <section>
+      <h2>Calls</h2>
+      <div id="calls" class="calls">
+        <div class="empty">No calls yet.</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Only call people who expect it or consent to it, and follow the call-recording and robocall laws where you and the recipient are located.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
