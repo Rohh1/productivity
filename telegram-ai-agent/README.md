@@ -61,10 +61,19 @@ edit yourself — the AI is instructed never to invent pricing or promises.
    ./setup.sh
    ```
 
-   The script installs everything, asks for the credentials from steps 1–2
-   (plus your Anthropic API key), writes `.env`, and starts the bot.
+   The script installs everything, asks for the credentials from steps 1–2,
+   asks how the bot should reach Claude, writes `.env`, and starts the bot.
    Manual alternative: `pip install -r requirements.txt`, copy `.env.example`
    to `.env`, edit it, run `python bot.py`.
+
+   **Claude access — two options** (the script asks which):
+   - **Your Claude subscription (CLI)** — personal use, no per-message cost.
+     Needs Anthropic's `ant` CLI installed (`brew install anthropics/tap/ant`)
+     and a one-time `ant auth login`; the bot reads that login automatically.
+     Logins expire eventually, so you may need to `ant auth login` again now
+     and then. Leave `ANTHROPIC_API_KEY` out of `.env`.
+   - **API key** — pay-per-use (~1–2¢ per reply), most reliable for always-on.
+     Put the key in `.env` as `ANTHROPIC_API_KEY`.
 
 4. **First run is interactive**: it asks for your phone number, the login
    code Telegram sends you, and your 2FA password if you have one. Never

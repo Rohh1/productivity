@@ -42,8 +42,17 @@ if [ ! -f .env ]; then
     echo "     → message @BotFather on Telegram → /newbot → copy the token"
     read -rp "TELEGRAM_BOT_TOKEN: " BOT_TOKEN
     echo
-    echo "3/5  Anthropic API key → https://platform.claude.com (billing enabled)"
-    read -rp "ANTHROPIC_API_KEY: " ANTHROPIC_KEY
+    echo "3/5  Claude access — how should the bot reach Claude?"
+    echo "     [1] Your Claude subscription via the CLI  (personal use; no per-message"
+    echo "         cost, but needs the 'ant' CLI and an occasional re-login)"
+    echo "     [2] An Anthropic API key                  (pay-per-use; best for always-on)"
+    read -rp "Choose 1 or 2 [1]: " AUTH_CHOICE
+    AUTH_CHOICE=${AUTH_CHOICE:-1}
+    ANTHROPIC_KEY=""
+    if [ "$AUTH_CHOICE" = "2" ]; then
+        echo "     → get a key at https://platform.claude.com (billing enabled)"
+        read -rp "ANTHROPIC_API_KEY (sk-ant-...): " ANTHROPIC_KEY
+    fi
     echo
     echo "4/5  Admin chat ID (where drafts go for approval)."
     echo "     Don't know it yet? Press Enter — after startup, send /id to the"
@@ -52,19 +61,45 @@ if [ ! -f .env ]; then
     read -rp "ADMIN_CHAT_ID [0]: " ADMIN_ID
     ADMIN_ID=${ADMIN_ID:-0}
 
-    cat > .env <<EOF
-TG_API_ID=$TG_API_ID
-TG_API_HASH=$TG_API_HASH
-TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-ANTHROPIC_API_KEY=$ANTHROPIC_KEY
-ADMIN_CHAT_ID=$ADMIN_ID
-CLAUDE_MODEL=claude-opus-4-8
-STYLE_UPDATE_EVERY=10
-DB_PATH=goldclub.db
-SESSION_NAME=goldclub_user
-EOF
+    {
+        echo "TG_API_ID=$TG_API_ID"
+        echo "TG_API_HASH=$TG_API_HASH"
+        echo "TELEGRAM_BOT_TOKEN=$BOT_TOKEN"
+        # Omit the key entirely in CLI mode — a blank key would break login.
+        if [ -n "$ANTHROPIC_KEY" ]; then echo "ANTHROPIC_API_KEY=$ANTHROPIC_KEY"; fi
+        echo "ADMIN_CHAT_ID=$ADMIN_ID"
+        echo "CLAUDE_MODEL=claude-opus-4-8"
+        echo "STYLE_UPDATE_EVERY=10"
+        echo "DB_PATH=goldclub.db"
+        echo "SESSION_NAME=goldclub_user"
+    } > .env
     chmod 600 .env
     echo "✅ .env written."
+fi
+
+# --- Ensure Claude is reachable ---
+if grep -qE '^ANTHROPIC_API_KEY=.+' .env; then
+    echo "✅ Claude access: using an API key from .env."
+else
+    echo "Claude access: using your Claude subscription via the Anthropic CLI ('ant')."
+    if ! command -v ant >/dev/null 2>&1; then
+        echo "❌ The 'ant' CLI isn't installed yet. Install it, then re-run ./setup.sh:"
+        if [ "$(uname)" = "Darwin" ]; then
+            echo "     brew install anthropics/tap/ant"
+            echo "     xattr -d com.apple.quarantine \"\$(brew --prefix)/bin/ant\" 2>/dev/null || true"
+            echo "   No Homebrew? Install it from https://brew.sh first, or download a"
+            echo "   macOS binary from https://github.com/anthropics/anthropic-cli/releases"
+        else
+            echo "   See https://github.com/anthropics/anthropic-cli/releases"
+        fi
+        exit 1
+    fi
+    if ant auth status 2>&1 | grep -qiE 'logged in|active|profile|expires|@'; then
+        echo "✅ Claude CLI already logged in."
+    else
+        echo "Opening Claude login in your browser (add --no-browser on a headless server)…"
+        ant auth login
+    fi
 fi
 
 echo
@@ -81,7 +116,8 @@ echo
 echo "Starting the agent…"
 echo "First run: it will ask for your phone number and the login code Telegram"
 echo "sends you (plus your 2FA password if set). NEVER share that code with"
-echo "anyone — type it only into this terminal."
+echo "anyone — type it only into this terminal. (This is the Telegram login,"
+echo "separate from any Claude login above.)"
 echo "Stop with Ctrl+C."
 echo
 exec ./venv/bin/python bot.py

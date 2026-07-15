@@ -19,6 +19,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# When no API key is configured, authenticate via a Claude CLI login
+# (`ant auth login`), whose stored profile the Anthropic SDK reads
+# automatically. A blank ANTHROPIC_API_KEY would otherwise take precedence and
+# fail, so drop an empty one and let the SDK fall back to that profile.
+if not os.environ.get("ANTHROPIC_API_KEY"):
+    os.environ.pop("ANTHROPIC_API_KEY", None)
+
 from telethon import TelegramClient, events
 from telegram import ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
