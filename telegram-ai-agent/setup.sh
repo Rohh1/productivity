@@ -8,7 +8,14 @@ cd "$(dirname "$0")"
 echo "=== Gold Club Telegram AI agent — setup ==="
 
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "❌ python3 is not installed. Install Python 3.10+ and re-run."
+    echo "❌ python3 is not installed."
+    if [ "$(uname)" = "Darwin" ]; then
+        echo "   On macOS, install Apple's command-line tools with:"
+        echo "       xcode-select --install"
+        echo "   (or 'brew install python' if you use Homebrew), then re-run ./setup.sh"
+    else
+        echo "   Install Python 3.10+ and re-run ./setup.sh"
+    fi
     exit 1
 fi
 
