@@ -21,8 +21,9 @@ Browser UI  ──►  Node/Express server  ──►  Twilio (places the call, 
 
 1. **Node.js 18+**
 2. **An Anthropic API key** — <https://console.anthropic.com>
-3. **A Twilio account + a phone number** with Voice enabled —
-   <https://www.twilio.com/console> (Account SID, Auth Token, and the number)
+3. **A Twilio account** — <https://www.twilio.com/console> (Account SID + Auth
+   Token). Plus a number to place calls from: your **Telus number verified as a
+   caller ID** (see below), or a Twilio number you buy.
 4. **A public URL** for this server so Twilio can call back to it. Locally,
    use [ngrok](https://ngrok.com): `ngrok http 3000`.
 
@@ -32,12 +33,32 @@ Browser UI  ──►  Node/Express server  ──►  Twilio (places the call, 
 cd ai-caller
 npm install
 cp .env.example .env
-# edit .env and fill in your keys, Twilio number, and PUBLIC_URL
+# edit .env and fill in your keys, caller ID, and PUBLIC_URL
 npm start
 ```
 
 Open <http://localhost:3000>, enter a phone number and a goal, and click
 **Place call**. The transcript streams into the page live as the call happens.
+
+## Using your Telus VoIP number
+
+Twilio still places the call, but you can make the person you're calling see your
+**Telus number** as the caller ID (and place the call from it):
+
+1. Verify the number with Twilio once:
+   ```bash
+   npm run verify:callerid        # reads CALLER_ID, or: npm run verify:callerid +15875551234
+   ```
+   Twilio calls your Telus number; answer it and key in the 6-digit code the
+   command prints.
+2. Set `CALLER_ID` in `.env` to that Telus number and restart. Every call now
+   shows your Telus number.
+
+That's the easy, always-works path. If Telus gave you **SIP trunk credentials**
+(a host/domain + username + password), you can instead have calls egress over
+your Telus line via a [Twilio Elastic SIP Trunk / BYOC](https://www.twilio.com/docs/sip-trunking)
+— set that trunk's number as `CALLER_ID`. Most consumer Telus VoIP plans don't
+expose SIP trunking, so use the caller-ID path above unless you know you have it.
 
 ## Calling a support line (IVR + keypad)
 
@@ -94,7 +115,8 @@ Edit the `scenario` at the top of `simulate.mjs` to try your own menu script.
 | `ANTHROPIC_API_KEY` | yes | Your Anthropic API key |
 | `TWILIO_ACCOUNT_SID` | yes | Twilio Account SID |
 | `TWILIO_AUTH_TOKEN` | yes | Twilio Auth Token |
-| `TWILIO_FROM_NUMBER` | yes | A Twilio number you own (E.164, e.g. `+14155550100`) |
+| `CALLER_ID` | yes* | Number people see / call is placed from — your verified Telus number (E.164). *Either this or `TWILIO_FROM_NUMBER`. |
+| `TWILIO_FROM_NUMBER` | yes* | A Twilio number you own. Used as caller ID only if `CALLER_ID` is unset. |
 | `PUBLIC_URL` | yes | Public https base URL of this server (e.g. your ngrok URL), no trailing slash |
 | `ANTHROPIC_MODEL` | no | Defaults to `claude-opus-4-8` |
 | `CALLER_NAME` | no | The name the AI says it's calling on behalf of |

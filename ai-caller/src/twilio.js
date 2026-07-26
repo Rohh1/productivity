@@ -15,7 +15,7 @@ export function twilioClient() {
 export async function placeCall(call) {
   const params = {
     to: call.to,
-    from: config.twilio.fromNumber,
+    from: config.callerId, // your Telus number (verified caller ID) or a Twilio number
     url: `${config.publicUrl}/voice/answer?callId=${call.id}`,
     method: "POST",
     statusCallback: `${config.publicUrl}/voice/status?callId=${call.id}`,

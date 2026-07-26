@@ -11,8 +11,14 @@ export const config = {
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || "",
     authToken: process.env.TWILIO_AUTH_TOKEN || "",
+    // A Twilio number on the account (optional if CALLER_ID is a verified number).
     fromNumber: process.env.TWILIO_FROM_NUMBER || "",
   },
+
+  // The number the recipient sees, and the number the call is placed from.
+  // Set this to your Telus VoIP number (verified in Twilio as an outgoing
+  // caller ID — see `npm run verify:callerid`). Falls back to the Twilio number.
+  callerId: process.env.CALLER_ID || process.env.TWILIO_FROM_NUMBER || "",
 
   voice: process.env.TWILIO_VOICE || "Polly.Joanna",
   callerName: process.env.CALLER_NAME || "",
@@ -25,7 +31,9 @@ export function missingConfig() {
   if (!config.anthropicApiKey) missing.push("ANTHROPIC_API_KEY");
   if (!config.twilio.accountSid) missing.push("TWILIO_ACCOUNT_SID");
   if (!config.twilio.authToken) missing.push("TWILIO_AUTH_TOKEN");
-  if (!config.twilio.fromNumber) missing.push("TWILIO_FROM_NUMBER");
+  // Need a number to place the call from: your verified Telus number via
+  // CALLER_ID, or a Twilio number via TWILIO_FROM_NUMBER.
+  if (!config.callerId) missing.push("CALLER_ID (or TWILIO_FROM_NUMBER)");
   if (!config.publicUrl) missing.push("PUBLIC_URL");
   return missing;
 }
