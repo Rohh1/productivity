@@ -1,0 +1,24 @@
+{
+  "name": "ai-caller",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An AI voice agent that places real outbound phone calls using Twilio and Claude.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "simulate": "node simulate.mjs",
+    "verify:callerid": "node verify-callerid.mjs",
+    "check": "node --check server.js && node --check simulate.mjs && node --check verify-callerid.mjs && node --check src/anthropic.js && node --check src/twilio.js && node --check src/twiml.js && node --check src/calls.js && node --check src/config.js && node --check src/util.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "twilio": "^5.10.2"
+  }
+}
